@@ -19,7 +19,7 @@ import { saveStateToDB, loadStateFromDB } from '../lib/storage';
 interface ConsolidationContextType extends ConsolidationState {
   addEntity: (entity: Omit<Entity, 'id' | 'isValidated' | 'trialBalance'>) => void;
   deleteEntity: (id: string) => void;
-  updateTrialBalance: (entityId: string, tb: TrialBalanceEntry[]) => void;
+  updateTrialBalance: (entityId: string, tb: TrialBalanceEntry[], rawCsvData?: string, fileName?: string) => void;
   loadSampleData: () => void;
   runConsolidation: () => void;
   addLog: (action: string, details: string) => void;
@@ -91,19 +91,17 @@ export const ConsolidationProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [addLog]);
 
   const deleteEntity = useCallback((id: string) => {
-    setState(prev => {
-      const entity = prev.entities.find(e => e.id === id);
-      if (entity) {
-        addLog('ENTITY_DELETED', `Entity ${entity.name} removed from registry.`);
-      }
-      return {
-        ...prev,
-        entities: prev.entities.filter(e => e.id !== id)
-      };
-    });
-  }, [addLog]);
+    const entity = state.entities.find(e => e.id === id);
+    if (entity) {
+      addLog('ENTITY_DELETED', `Entity ${entity.name} removed from registry.`);
+    }
+    setState(prev => ({
+      ...prev,
+      entities: prev.entities.filter(e => e.id !== id)
+    }));
+  }, [state.entities, addLog]);
 
-  const updateTrialBalance = useCallback((entityId: string, tb: TrialBalanceEntry[]) => {
+  const updateTrialBalance = useCallback((entityId: string, tb: TrialBalanceEntry[], rawCsvData?: string, fileName?: string) => {
     // Validate Debits == Credits
     const totalDebits = Math.round(tb.reduce((sum, item) => sum + item.debit, 0) * 100) / 100;
     const totalCredits = Math.round(tb.reduce((sum, item) => sum + item.credit, 0) * 100) / 100;
@@ -114,7 +112,7 @@ export const ConsolidationProvider: React.FC<{ children: React.ReactNode }> = ({
       ...prev,
       entities: prev.entities.map(e => 
         e.id === entityId 
-          ? { ...e, trialBalance: tb, isValidated: isValid, lastUploadAt: new Date().toISOString() } 
+          ? { ...e, trialBalance: tb, isValidated: isValid, lastUploadAt: new Date().toISOString(), rawCsvData, fileName } 
           : e
       )
     }));
@@ -170,114 +168,56 @@ export const ConsolidationProvider: React.FC<{ children: React.ReactNode }> = ({
     addLog('SAMPLE_DATA_LOADED', 'Corporate demonstration payload injected into engine.');
   }, [addLog]);
 
-  const runConsolidation = useCallback(() => {
+  const runConsolidation = useCallback(async () => {
     const { entities } = state;
     if (entities.length === 0) return;
 
-    const eliminations: EliminationEntry[] = [];
-    
-    // 1. Investment in Subsidiaries Elimination
-    const parents = entities.filter(e => e.type === 'Parent');
-    const subsidiaries = entities.filter(e => e.type === 'Subsidiary');
+    try {
+      addLog('CONSOLIDATION_STARTED', 'Initiating server-side consolidation...');
+      const formData = new FormData();
+      
+      const entitiesMetadata = entities.map(e => ({
+        id: e.id,
+        name: e.name,
+        type: e.type,
+        ownershipPercentage: e.ownershipPercentage,
+        currency: e.currency,
+        fileName: e.fileName,
+        trialBalance: e.trialBalance
+      }));
+      formData.append('metadata', JSON.stringify(entitiesMetadata));
 
-    subsidiaries.forEach(sub => {
-      // Find investment account in parent that matches this sub
-      parents.forEach(parent => {
-        const investmentAccounts = parent.trialBalance.filter(acc => 
-          acc.accountType === 'Asset' && 
-          (acc.accountName.toLowerCase().includes('investment') || acc.accountName.toLowerCase().includes('shares in')) &&
-          (acc.accountName.toLowerCase().includes(sub.name.toLowerCase()) || sub.name.toLowerCase().includes(acc.accountName.toLowerCase().split(' ').pop() || ''))
-        );
-
-        investmentAccounts.forEach(acc => {
-          eliminations.push({
-            id: uuidv4(),
-            type: 'Investment',
-            description: `Elimination of investment in ${sub.name}`,
-            debit: 0,
-            credit: acc.debit,
-            accountName: acc.accountName,
-            accountType: 'Asset',
-            timestamp: new Date().toISOString()
-          });
-
-          // Offset Sub's Equity (simplified: eliminate common shares up to ownership %)
-          const subEquityAccounts = sub.trialBalance.filter(sa => sa.accountType === 'Equity');
-          subEquityAccounts.forEach(se => {
-            const eliminatedAmount = se.credit * (sub.ownershipPercentage / 100);
-            if (eliminatedAmount !== 0) {
-              eliminations.push({
-                id: uuidv4(),
-                type: 'Investment',
-                description: `Elimination of Sub Equity - ${sub.name} (${se.accountName})`,
-                debit: eliminatedAmount,
-                credit: 0,
-                accountName: se.accountName,
-                accountType: 'Equity',
-                timestamp: new Date().toISOString()
-              });
-            }
-          });
-        });
-      });
-    });
-
-    // 2. Intercompany Eliminations (Offset every IC account)
-    entities.forEach(entity => {
-      entity.trialBalance.filter(e => e.isIntercompany).forEach(entry => {
-        eliminations.push({
-          id: uuidv4(),
-          type: 'Intercompany',
-          description: `Elimination of IC ${entry.accountName} - ${entity.name}`,
-          debit: entry.credit,
-          credit: entry.debit,
-          accountName: entry.accountName,
-          accountType: entry.accountType || 'Liability',
-          timestamp: new Date().toISOString()
-        });
-      });
-    });
-
-    // 3. NCI Calculations (Allocation of Equity to NCI)
-    subsidiaries.forEach(sub => {
-      const nciPercent = (100 - sub.ownershipPercentage) / 100;
-      if (nciPercent > 0) {
-        // Equity accounts usually have credit balances
-        const equity = sub.trialBalance
-          .filter(item => item.accountType === 'Equity' || item.accountType === 'Revenue' || item.accountType === 'Expense')
-          .reduce((sum, item) => sum + (item.credit - item.debit), 0);
-        
-        const nciValue = equity * nciPercent;
-
-        if (Math.abs(nciValue) > 0.01) {
-          eliminations.push({
-            id: uuidv4(),
-            type: 'NCI',
-            description: `NCI Allocation for ${sub.name} (${(nciPercent * 100).toFixed(0)}%)`,
-            debit: 0,
-            credit: nciValue,
-            accountName: 'Non-Controlling Interest (BS)',
-            accountType: 'Equity',
-            timestamp: new Date().toISOString()
-          });
-          
-          // Offsetting debit to equity/earnings (simplified)
-          eliminations.push({
-            id: uuidv4(),
-            type: 'NCI',
-            description: `NCI Earnings Allocation for ${sub.name}`,
-            debit: nciValue,
-            credit: 0,
-            accountName: 'Consolidated Retained Earnings (NCI Portion)',
-            accountType: 'Equity',
-            timestamp: new Date().toISOString()
-          });
+      entities.forEach(e => {
+        if (e.rawCsvData && e.fileName) {
+          const blob = new Blob([e.rawCsvData], { type: 'text/csv' });
+          formData.append('files', blob, e.fileName);
         }
-      }
-    });
+      });
 
-    setState(prev => ({ ...prev, eliminations, lastConsolidationAt: new Date().toISOString() }));
-    addLog('CONSOLIDATION_RUN', `Engine executed for ${entities.length} entities. ${eliminations.length} journals generated.`);
+      const response = await fetch('/api/consolidate', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Server consolidation failed');
+      }
+
+      const result = await response.json();
+      const newEliminations = result.eliminations || [];
+      const updatedEntities = result.entities || entities; // Backend may update TB
+
+      setState(prev => ({
+        ...prev,
+        entities: updatedEntities,
+        eliminations: newEliminations,
+        lastConsolidationAt: new Date().toISOString()
+      }));
+      addLog('CONSOLIDATION_RUN', `Server Engine executed for ${entities.length} entities. ${newEliminations.length} journals generated and saved to Firestore.`);
+    } catch (error: any) {
+      console.error(error);
+      addLog('CONSOLIDATION_FAILED', `Error: ${error.message}`);
+    }
   }, [state, addLog]);
 
   const updateSettings = (settings: ConsolidationState['settings']) => {

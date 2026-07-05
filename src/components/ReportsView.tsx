@@ -15,18 +15,23 @@ import { AccountType } from '../types/finance';
 export default function ReportsView() {
   const { entities, eliminations, settings, loadSampleData } = useConsolidation();
 
-  // Simple aggregation for the report
+  // Simple aggregation for the report (using Total Assets as the primary metric)
   const reportData = entities.map(e => {
-    const tbSum = e.trialBalance.reduce((s, i) => s + (i.debit - i.credit), 0);
+    const assets = e.trialBalance
+      .filter(item => item.accountType === 'Asset')
+      .reduce((sum, item) => sum + (item.debit - item.credit), 0);
     return {
       name: e.name,
       type: e.type,
-      raw: tbSum,
+      raw: assets,
     };
   });
 
-  const totalElims = eliminations.reduce((s, e) => s + (e.debit - e.credit), 0);
-  const consolidatedTotal = reportData.reduce((s, r) => s + r.raw, 0) + totalElims;
+  const totalAssetsElims = eliminations
+    .filter(el => el.accountType === 'Asset')
+    .reduce((sum, el) => sum + (el.debit - el.credit), 0);
+  
+  const consolidatedTotal = reportData.reduce((s, r) => s + r.raw, 0) + totalAssetsElims;
 
   const accountTypes: AccountType[] = ['Asset', 'Liability', 'Equity', 'Revenue', 'Expense'];
 
@@ -107,18 +112,18 @@ export default function ReportsView() {
     });
   });
 
-  // Adjust for eliminations (Simplified: IC elims usually affect both sides)
+  // Adjust for eliminations
   eliminations.forEach(el => {
-    if (el.description.toLowerCase().includes('asset')) {
+    if (el.accountType === 'Asset') {
       totalAssets += (el.debit - el.credit);
-    } else if (el.description.toLowerCase().includes('liability')) {
+    } else if (el.accountType === 'Liability') {
       totalLiabilities += (el.credit - el.debit);
     }
   });
 
   const chartData = [
     ...reportData.map(r => ({ name: r.name, value: r.raw })),
-    { name: 'Eliminations', value: totalElims },
+    { name: 'Eliminations', value: totalAssetsElims },
     { name: 'Consolidated', value: consolidatedTotal },
   ];
 
@@ -127,23 +132,23 @@ export default function ReportsView() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-white">STRATIFY Consolidation Matrix</h1>
-            <p className="text-slate-400 text-sm mt-1">IFRS-10 compliant financial reporting output.</p>
+            <h1 className="text-2xl font-bold text-slate-900">STRATIFY Consolidation Matrix</h1>
+            <p className="text-slate-500 text-sm mt-1">IFRS-10 compliant financial reporting output.</p>
           </div>
         </div>
 
-        <div className="bg-[#0f1218] border border-slate-800 rounded-2xl p-20 flex flex-col items-center justify-center text-center">
-          <div className="w-20 h-20 bg-slate-900 rounded-full flex items-center justify-center mb-6 border border-slate-800">
+        <div className="bg-white border border-slate-200 rounded-2xl p-20 flex flex-col items-center justify-center text-center">
+          <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6 border border-slate-200">
             <TrendingUp size={40} className="text-slate-700" />
           </div>
-          <h2 className="text-xl font-bold text-white mb-2">No Reports Available</h2>
+          <h2 className="text-xl font-bold text-slate-900 mb-2">No Reports Available</h2>
           <p className="text-slate-500 max-w-md mb-8">
             Reports are generated dynamically after entities are defined and consolidation is executed. Load sample data or add entities to begin.
           </p>
           <div className="flex gap-4">
             <button 
               onClick={loadSampleData}
-              className="px-8 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold transition-all"
+              className="px-8 py-3 bg-slate-100 hover:bg-slate-200 text-slate-900 rounded-xl font-bold transition-all"
             >
               Quick Load Sample Data
             </button>
@@ -157,12 +162,12 @@ export default function ReportsView() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">STRATIFY Consolidation Matrix</h1>
-          <p className="text-slate-400 text-sm mt-1">IFRS-10 compliant financial reporting output for corporate audit.</p>
+          <h1 className="text-2xl font-bold text-slate-900">STRATIFY Consolidation Matrix</h1>
+          <p className="text-slate-500 text-sm mt-1">IFRS-10 compliant financial reporting output for corporate audit.</p>
         </div>
         <button 
           onClick={handleExport}
-          className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
+          className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-900 px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
         >
           <Download size={18} />
           Export CPA Pack
@@ -171,10 +176,10 @@ export default function ReportsView() {
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <div className="lg:col-span-3">
-          <div className="bg-[#0f1218] border border-slate-800 rounded-xl overflow-hidden shadow-xl">
-            <div className="p-6 border-b border-slate-800 bg-slate-900/30">
+          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xl">
+            <div className="p-6 border-b border-slate-200 bg-slate-50/30">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-white">Statement of Financial Position</h3>
+                <h3 className="text-lg font-bold text-slate-900">Statement of Financial Position</h3>
                 <span className="text-xs bg-blue-600/10 text-blue-400 px-2 py-1 rounded border border-blue-600/20 font-mono">
                   Period: {settings.reportingPeriod}
                 </span>
@@ -194,16 +199,16 @@ export default function ReportsView() {
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm border-collapse">
                 <thead>
-                  <tr className="bg-slate-900/50 text-slate-500">
-                    <th className="px-6 py-4 border-b border-slate-800 font-semibold">Account Class</th>
+                  <tr className="bg-slate-50/50 text-slate-500">
+                    <th className="px-6 py-4 border-b border-slate-200 font-semibold">Account Class</th>
                     {entities.map(e => (
-                      <th key={e.id} className="px-6 py-4 border-b border-slate-800 font-semibold text-right">{e.name}</th>
+                      <th key={e.id} className="px-6 py-4 border-b border-slate-200 font-semibold text-right">{e.name}</th>
                     ))}
-                    <th className="px-6 py-4 border-b border-slate-800 font-semibold text-right text-amber-500">Eliminations</th>
-                    <th className="px-6 py-4 border-b border-slate-800 font-semibold text-right text-blue-400">Consolidated</th>
+                    <th className="px-6 py-4 border-b border-slate-200 font-semibold text-right text-amber-500">Eliminations</th>
+                    <th className="px-6 py-4 border-b border-slate-200 font-semibold text-right text-blue-400">Consolidated</th>
                   </tr>
                 </thead>
-                <tbody className="text-slate-300">
+                <tbody className="text-slate-700">
                   {accountTypes.map(type => {
                     const isNormalDebit = type === 'Asset' || type === 'Expense';
                     const elimValue = eliminations
@@ -215,7 +220,7 @@ export default function ReportsView() {
                     const consolidated = getConsolidatedValue(type);
 
                     return (
-                      <tr key={type} className="hover:bg-slate-800/20 border-b border-slate-800/50">
+                      <tr key={type} className="hover:bg-slate-100/20 border-b border-slate-200/50">
                         <td className="px-6 py-4 font-medium">{type}s</td>
                         {entities.map(e => {
                           const val = getEntityValue(e.id, type);
@@ -233,8 +238,8 @@ export default function ReportsView() {
                       </tr>
                     );
                   })}
-                  <tr className="bg-slate-900/30 font-bold border-t border-slate-700">
-                    <td className="px-6 py-4 text-white uppercase tracking-widest text-[10px]">Total Balance Check (Dr - Cr)</td>
+                  <tr className="bg-slate-50/30 font-bold border-t border-slate-300">
+                    <td className="px-6 py-4 text-slate-900 uppercase tracking-widest text-[10px]">Total Balance Check (Dr - Cr)</td>
                     {entities.map(e => {
                       const total = e.trialBalance.reduce((s, i) => s + (i.debit - i.credit), 0);
                       return (
@@ -253,21 +258,21 @@ export default function ReportsView() {
         </div>
 
         <div className="space-y-6">
-          <div className="bg-[#0f1218] border border-slate-800 rounded-xl p-6">
-            <h3 className="text-sm font-bold text-slate-300 uppercase tracking-widest mb-6">Asset vs Liability (D3)</h3>
+          <div className="bg-white border border-slate-200 rounded-xl p-6">
+            <h3 className="text-sm font-bold text-slate-700 uppercase tracking-widest mb-6">Asset vs Liability (D3)</h3>
             <div className="py-4">
               <AssetLiabilityChart assets={Math.max(0, totalAssets)} liabilities={Math.max(0, totalLiabilities)} />
             </div>
           </div>
 
-          <div className="bg-[#0f1218] border border-slate-800 rounded-xl p-6">
-            <h3 className="text-sm font-bold text-slate-300 uppercase tracking-widest mb-6">Entity Contribution</h3>
+          <div className="bg-white border border-slate-200 rounded-xl p-6">
+            <h3 className="text-sm font-bold text-slate-700 uppercase tracking-widest mb-6">Entity Contribution</h3>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData}>
                   <XAxis dataKey="name" hide />
                   <Tooltip 
-                    contentStyle={{ backgroundColor: '#0f1218', border: '1px solid #1e293b', borderRadius: '8px' }}
+                    contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px' }}
                     itemStyle={{ color: '#94a3b8' }}
                   />
                   <Bar dataKey="value" radius={[4, 4, 0, 0]}>
@@ -285,7 +290,7 @@ export default function ReportsView() {
               <TrendingUp size={20} />
               <span className="text-xs font-bold uppercase tracking-widest">Audit Stability</span>
             </div>
-            <p className="text-slate-400 text-xs leading-relaxed">
+            <p className="text-slate-500 text-xs leading-relaxed">
               Consolidation matrix generated with zero-variance intercompany matching. Ready for external Big 4 audit review.
             </p>
           </div>

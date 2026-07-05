@@ -28,6 +28,8 @@ export interface Entity {
   ownershipPercentage: number;
   currency: string;
   trialBalance: TrialBalanceEntry[];
+  rawCsvData?: string;
+  fileName?: string;
   lastUploadAt?: string;
   isValidated: boolean;
 }

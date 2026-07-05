@@ -23,8 +23,8 @@ export default function AuditTrailView() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">STRATIFY Audit Ledger</h1>
-          <p className="text-slate-400 text-sm mt-1">Immutable, cryptographically hashed system events for regulatory compliance.</p>
+          <h1 className="text-2xl font-bold text-slate-900">STRATIFY Audit Ledger</h1>
+          <p className="text-slate-500 text-sm mt-1">Immutable, cryptographically hashed system events for regulatory compliance.</p>
         </div>
         <div className="flex gap-2">
           <div className="relative">
@@ -34,15 +34,15 @@ export default function AuditTrailView() {
               placeholder="Search logs..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="bg-[#0f1218] border border-slate-800 rounded-lg pl-10 pr-4 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-600"
+              className="bg-white border border-slate-200 rounded-lg pl-10 pr-4 py-2 text-sm text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-600"
             />
           </div>
         </div>
       </div>
 
-      <div className="bg-[#0f1218] border border-slate-800 rounded-xl overflow-hidden">
-        <div className="p-4 bg-slate-900/50 border-b border-slate-800 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-slate-300">
+      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+        <div className="p-4 bg-slate-50/50 border-b border-slate-200 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-slate-700">
             <Lock size={16} className="text-blue-500" />
             <span className="text-xs font-bold uppercase tracking-widest">Tamper-Proof Ledger</span>
           </div>
@@ -52,7 +52,7 @@ export default function AuditTrailView() {
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="text-slate-500 border-b border-slate-800">
+              <tr className="text-slate-500 border-b border-slate-200">
                 <th className="px-6 py-4 font-semibold w-48">Timestamp (UTC)</th>
                 <th className="px-6 py-4 font-semibold w-40">User ID</th>
                 <th className="px-6 py-4 font-semibold">Action</th>
@@ -60,14 +60,14 @@ export default function AuditTrailView() {
                 <th className="px-6 py-4 font-semibold text-right font-mono text-[10px]">Security Hash</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/50">
+            <tbody className="divide-y divide-slate-200">
               {filteredLogs.map(log => (
-                <tr key={log.id} className="hover:bg-slate-800/30 transition-colors group">
-                  <td className="px-6 py-4 text-slate-400 whitespace-nowrap">
+                <tr key={log.id} className="hover:bg-slate-100/30 transition-colors group">
+                  <td className="px-6 py-4 text-slate-500 whitespace-nowrap">
                     {format(new Date(log.timestamp), 'yyyy-MM-dd HH:mm:ss')}
                   </td>
                   <td className="px-6 py-4">
-                    <span className="px-2 py-0.5 bg-slate-800 border border-slate-700 rounded text-[10px] text-slate-300 font-mono">
+                    <span className="px-2 py-0.5 bg-slate-100 border border-slate-300 rounded text-[10px] text-slate-700 font-mono">
                       {log.userId}
                     </span>
                   </td>
@@ -79,7 +79,7 @@ export default function AuditTrailView() {
                       {log.action}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-slate-300 italic text-xs max-w-md truncate">
+                  <td className="px-6 py-4 text-slate-700 italic text-xs max-w-md truncate">
                     {log.details}
                   </td>
                   <td className="px-6 py-4 text-right">

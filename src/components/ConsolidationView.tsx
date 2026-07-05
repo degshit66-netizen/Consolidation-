@@ -27,16 +27,16 @@ export default function ConsolidationView() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-white">STRATIFY Consolidation Engine</h1>
-            <p className="text-slate-400 text-sm mt-1">Execute IFRS-10 elimination journals and NCI computations.</p>
+            <h1 className="text-2xl font-bold text-slate-900">STRATIFY Consolidation Engine</h1>
+            <p className="text-slate-500 text-sm mt-1">Execute IFRS-10 elimination journals and NCI computations.</p>
           </div>
         </div>
 
-        <div className="bg-[#0f1218] border border-slate-800 rounded-2xl p-20 flex flex-col items-center justify-center text-center">
-          <div className="w-20 h-20 bg-slate-900 rounded-full flex items-center justify-center mb-6 border border-slate-800">
+        <div className="bg-white border border-slate-200 rounded-2xl p-20 flex flex-col items-center justify-center text-center">
+          <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6 border border-slate-200">
             <Calculator size={40} className="text-slate-700" />
           </div>
-          <h2 className="text-xl font-bold text-white mb-2">No Entity Data Found</h2>
+          <h2 className="text-xl font-bold text-slate-900 mb-2">No Entity Data Found</h2>
           <p className="text-slate-500 max-w-md mb-8 italic">
             "Consolidation is the process of combining the financial results of several subsidiary companies into the combined financial results of the parent company."
           </p>
@@ -55,9 +55,9 @@ export default function ConsolidationView() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">STRATIFY Consolidation Engine</h1>
+          <h1 className="text-2xl font-bold text-slate-900">STRATIFY Consolidation Engine</h1>
           <div className="flex items-center gap-3 mt-1">
-            <p className="text-slate-400 text-sm">Execute IFRS-10 elimination journals and NCI computations with enterprise-grade precision.</p>
+            <p className="text-slate-500 text-sm">Execute IFRS-10 elimination journals and NCI computations with enterprise-grade precision.</p>
             {lastConsolidationAt && (
               <>
                 <div className="w-1 h-1 bg-slate-700 rounded-full" />
@@ -83,6 +83,29 @@ export default function ConsolidationView() {
         </div>
       </div>
 
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-white border border-slate-200 p-4 rounded-xl">
+          <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold block mb-1">Entities</span>
+          <span className="text-xl font-mono text-slate-900">{entities.length}</span>
+        </div>
+        <div className="bg-white border border-slate-200 p-4 rounded-xl">
+          <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold block mb-1">Journals</span>
+          <span className="text-xl font-mono text-blue-400">{eliminations.length}</span>
+        </div>
+        <div className="bg-white border border-slate-200 p-4 rounded-xl">
+          <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold block mb-1">Goodwill Recognized</span>
+          <span className="text-xl font-mono text-emerald-400">
+            {formatCurrency(eliminations.filter(e => e.accountName.includes('Goodwill')).reduce((s, e) => s + e.debit, 0))}
+          </span>
+        </div>
+        <div className="bg-white border border-slate-200 p-4 rounded-xl">
+          <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold block mb-1">Net Variance</span>
+          <span className={cn("text-xl font-mono", isBalanced ? "text-emerald-500" : "text-red-500")}>
+            {formatCurrency(totalEliminations)}
+          </span>
+        </div>
+      </div>
+
       {!allValidated && (
         <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-xl flex items-start gap-4">
           <Info className="text-amber-500 mt-0.5" size={20} />
@@ -95,9 +118,9 @@ export default function ConsolidationView() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-[#0f1218] border border-slate-800 rounded-xl overflow-hidden">
-            <div className="p-4 bg-slate-900/50 border-b border-slate-800 flex items-center justify-between">
-              <h3 className="text-sm font-bold text-slate-300 uppercase tracking-widest">Elimination Journals</h3>
+          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+            <div className="p-4 bg-slate-50/50 border-b border-slate-200 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-slate-700 uppercase tracking-widest">Elimination Journals</h3>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] text-slate-500">Net Variance:</span>
                 <span className={cn("text-[10px] font-mono", isBalanced ? "text-green-500" : "text-red-500")}>
@@ -108,23 +131,23 @@ export default function ConsolidationView() {
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead>
-                  <tr className="text-slate-500 border-b border-slate-800">
+                  <tr className="text-slate-500 border-b border-slate-200">
                     <th className="px-6 py-4 font-semibold">Description</th>
                     <th className="px-6 py-4 font-semibold">Account</th>
                     <th className="px-6 py-4 font-semibold text-right">Debit</th>
                     <th className="px-6 py-4 font-semibold text-right">Credit</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/50">
+                <tbody className="divide-y divide-slate-200">
                   {eliminations.map(entry => (
-                    <tr key={entry.id} className="hover:bg-slate-800/30 transition-colors">
+                    <tr key={entry.id} className="hover:bg-slate-100/30 transition-colors">
                       <td className="px-6 py-4">
                         <div className="flex flex-col">
                           <span className="text-slate-200">{entry.description}</span>
                           <span className="text-[10px] text-slate-500 uppercase">{entry.type} Journal</span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-slate-400">{entry.accountName}</td>
+                      <td className="px-6 py-4 text-slate-500">{entry.accountName}</td>
                       <td className="px-6 py-4 text-right font-mono text-blue-400">{entry.debit > 0 ? formatCurrency(entry.debit) : '—'}</td>
                       <td className="px-6 py-4 text-right font-mono text-emerald-400">{entry.credit > 0 ? formatCurrency(entry.credit) : '—'}</td>
                     </tr>
@@ -143,8 +166,8 @@ export default function ConsolidationView() {
         </div>
 
         <div className="space-y-6">
-          <div className="bg-[#0f1218] border border-slate-800 rounded-xl p-6">
-            <h3 className="text-sm font-bold text-slate-300 uppercase tracking-widest mb-6">Validation Checklist</h3>
+          <div className="bg-white border border-slate-200 rounded-xl p-6">
+            <h3 className="text-sm font-bold text-slate-700 uppercase tracking-widest mb-6">Validation Checklist</h3>
             <div className="space-y-4">
               <CheckItem label="IFRS-10 Compliance Scan" done={eliminations.length > 0} />
               <CheckItem label="Investment Elimination" done={eliminations.some(e => e.type === 'Investment')} />
@@ -159,7 +182,7 @@ export default function ConsolidationView() {
               <Calculator size={80} />
             </div>
             <h3 className="text-blue-400 text-xs font-bold uppercase tracking-tighter mb-2">Engine Integrity</h3>
-            <p className="text-slate-400 text-xs leading-relaxed">
+            <p className="text-slate-500 text-xs leading-relaxed">
               The consolidation engine strictly enforces the aggregation rules of IAS 21 and IFRS 10. Mismatched intercompany balances will trigger a mandatory parking in the Suspense clearing account.
             </p>
           </div>
@@ -172,11 +195,11 @@ export default function ConsolidationView() {
 function CheckItem({ label, done }: { label: string; done: boolean }) {
   return (
     <div className="flex items-center justify-between">
-      <span className={cn("text-sm", done ? "text-slate-300" : "text-slate-500")}>{label}</span>
+      <span className={cn("text-sm", done ? "text-slate-700" : "text-slate-500")}>{label}</span>
       {done ? (
         <CheckCircle className="text-emerald-500" size={16} />
       ) : (
-        <div className="w-4 h-4 rounded-full border-2 border-slate-800" />
+        <div className="w-4 h-4 rounded-full border-2 border-slate-200" />
       )}
     </div>
   );
