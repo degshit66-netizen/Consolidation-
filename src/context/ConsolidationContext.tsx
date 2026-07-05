@@ -12,7 +12,6 @@ import {
   AuditLog,
   TrialBalanceEntry
 } from '../types/finance';
-import { v4 as uuidv4 } from 'uuid';
 import { generateHash } from '../lib/utils';
 import { saveStateToDB, loadStateFromDB } from '../lib/storage';
 
@@ -70,7 +69,7 @@ export const ConsolidationProvider: React.FC<{ children: React.ReactNode }> = ({
   const addLog = useCallback((action: string, details: string) => {
     const timestamp = new Date().toISOString();
     const newLog: AuditLog = {
-      id: uuidv4(),
+      id: crypto.randomUUID(),
       timestamp,
       userId: 'CONTROLLER-01',
       action,
@@ -83,7 +82,7 @@ export const ConsolidationProvider: React.FC<{ children: React.ReactNode }> = ({
   const addEntity = useCallback((entityData: Omit<Entity, 'id' | 'isValidated' | 'trialBalance' | 'isMapped'>) => {
     const newEntity: Entity = {
       ...entityData,
-      id: uuidv4(),
+      id: crypto.randomUUID(),
       isValidated: false,
       isMapped: false,
       trialBalance: [],
@@ -158,8 +157,8 @@ export const ConsolidationProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   const loadSampleData = useCallback(() => {
-    const parentId = uuidv4();
-    const subId = uuidv4();
+    const parentId = crypto.randomUUID();
+    const subId = crypto.randomUUID();
     
     const sampleEntities: Entity[] = [
       {

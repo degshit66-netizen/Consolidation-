@@ -19,65 +19,80 @@ export default function EntitiesView() {
   const [newOwnership, setNewOwnership] = useState(100);
 
   const handleFileUpload = (entityId: string, file: File) => {
-    const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
+    const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls') || file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || file.type === 'application/vnd.ms-excel';
     const entity = entities.find(e => e.id === entityId);
 
     if (isExcel) {
       const reader = new FileReader();
       reader.onload = (e) => {
-        const data = new Uint8Array(e.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: 'array' });
-        const firstSheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheetName];
-        const jsonDataRaw = XLSX.utils.sheet_to_json(worksheet) as any[];
-        
-        // Normalize keys for XLSX as well
-        const jsonData = jsonDataRaw.map(row => {
-          const normalized: any = {};
-          Object.keys(row).forEach(key => {
-            normalized[key.toLowerCase().trim()] = row[key];
+        try {
+          const data = new Uint8Array(e.target?.result as ArrayBuffer);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          const jsonDataRaw = XLSX.utils.sheet_to_json(worksheet) as any[];
+          
+          if (jsonDataRaw.length === 0) {
+            addLog('UPLOAD_ERROR', `The file ${file.name} appears to be empty.`);
+            return;
+          }
+
+          // Normalize keys for XLSX as well
+          const jsonData = jsonDataRaw.map(row => {
+            const normalized: any = {};
+            Object.keys(row).forEach(key => {
+              normalized[key.toLowerCase().trim().replace(/[\s_]/g, '')] = row[key];
+            });
+            return normalized;
           });
-          return normalized;
-        });
-        
-        // Currency Consistency Check
-        const fileCurrency = jsonData[0]?.['currency'];
-        if (fileCurrency && entity && fileCurrency !== entity.currency) {
-          addLog('CURRENCY_MISMATCH', `Currency mismatch detected! File: ${fileCurrency} vs Entity: ${entity.currency}.`);
+          
+          // Currency Consistency Check
+          const fileCurrency = jsonData[0]?.['currency'];
+          if (fileCurrency && entity && fileCurrency !== entity.currency) {
+            addLog('CURRENCY_MISMATCH', `Currency mismatch detected! File: ${fileCurrency} vs Entity: ${entity.currency}.`);
+          }
+
+          const tb: TrialBalanceEntry[] = jsonData.map(row => {
+            const rawType = (row['type'] || row['accounttype'] || row['category'] || '').toString();
+            let type: any = undefined;
+            const lType = rawType.toLowerCase();
+            if (lType.includes('asset')) type = 'Asset';
+            else if (lType.includes('liabilit')) type = 'Liability';
+            else if (lType.includes('equit')) type = 'Equity';
+            else if (lType.includes('revenu') || lType.includes('income') || lType.includes('sale')) type = 'Revenue';
+            else if (lType.includes('expens') || lType.includes('cost')) type = 'Expense';
+
+            return {
+              accountCode: (row['accountcode'] || row['code'] || row['id'] || row['number'] || '').toString(),
+              accountName: (row['accountname'] || row['name'] || row['description'] || row['account'] || '').toString(),
+              accountType: type,
+              debit: parseFloat((row['debit'] || row['dr'] || '0').toString().replace(/[^0-9.-]/g, '')) || 0,
+              credit: parseFloat((row['credit'] || row['cr'] || '0').toString().replace(/[^0-9.-]/g, '')) || 0,
+              isIntercompany: String(row['intercompany'] || row['isintercompany'] || row['ic']).toLowerCase() === 'yes' || row['isintercompany'] === 'true' || row['isintercompany'] === true || row['ic'] === true,
+              icPartner: row['icpartner'] || row['icpartner'] || row['partner']
+            };
+          });
+          
+          const csvString = Papa.unparse(jsonData);
+          updateTrialBalance(entityId, tb, csvString, file.name);
+        } catch (err: any) {
+          addLog('UPLOAD_ERROR', `Error processing Excel file: ${err.message}`);
         }
-
-        const tb: TrialBalanceEntry[] = jsonData.map(row => {
-          const rawType = (row['type'] || row['accounttype'] || '').toString();
-          let type: any = undefined;
-          if (rawType.toLowerCase().includes('asset')) type = 'Asset';
-          else if (rawType.toLowerCase().includes('liabilit')) type = 'Liability';
-          else if (rawType.toLowerCase().includes('equit')) type = 'Equity';
-          else if (rawType.toLowerCase().includes('revenu')) type = 'Revenue';
-          else if (rawType.toLowerCase().includes('expens')) type = 'Expense';
-
-          return {
-            accountCode: (row['account code'] || row['code'] || row['accountcode'] || '').toString(),
-            accountName: (row['account name'] || row['name'] || row['accountname'] || '').toString(),
-            accountType: type,
-            debit: parseFloat((row['debit'] || '0').toString().replace(/,/g, '')) || 0,
-            credit: parseFloat((row['credit'] || '0').toString().replace(/,/g, '')) || 0,
-            isIntercompany: String(row['intercompany'] || row['isintercompany']).toLowerCase() === 'yes' || row['isintercompany'] === 'true' || row['isintercompany'] === true,
-            icPartner: row['ic partner'] || row['icpartner']
-          };
-        });
-        
-        const csvString = Papa.unparse(jsonData);
-        updateTrialBalance(entityId, tb, csvString, file.name);
       };
       reader.readAsArrayBuffer(file);
     } else {
       Papa.parse(file, {
         header: true,
         skipEmptyLines: true,
-        transformHeader: (header) => header.toLowerCase().trim(),
+        transformHeader: (header) => header.toLowerCase().trim().replace(/[\s_]/g, ''),
         complete: (results) => {
           const data = results.data as any[];
           
+          if (data.length === 0) {
+            addLog('UPLOAD_ERROR', `The file ${file.name} appears to be empty.`);
+            return;
+          }
+
           // Currency Consistency Check
           const fileCurrency = data[0]?.['currency'];
           if (fileCurrency && entity && fileCurrency !== entity.currency) {
@@ -85,22 +100,23 @@ export default function EntitiesView() {
           }
 
           const tb: TrialBalanceEntry[] = data.map(row => {
-            const rawType = (row['type'] || row['accounttype'] || '').toString();
+            const rawType = (row['type'] || row['accounttype'] || row['category'] || '').toString();
             let type: any = undefined;
-            if (rawType.toLowerCase().includes('asset')) type = 'Asset';
-            else if (rawType.toLowerCase().includes('liabilit')) type = 'Liability';
-            else if (rawType.toLowerCase().includes('equit')) type = 'Equity';
-            else if (rawType.toLowerCase().includes('revenu')) type = 'Revenue';
-            else if (rawType.toLowerCase().includes('expens')) type = 'Expense';
+            const lType = rawType.toLowerCase();
+            if (lType.includes('asset')) type = 'Asset';
+            else if (lType.includes('liabilit')) type = 'Liability';
+            else if (lType.includes('equit')) type = 'Equity';
+            else if (lType.includes('revenu') || lType.includes('income') || lType.includes('sale')) type = 'Revenue';
+            else if (lType.includes('expens') || lType.includes('cost')) type = 'Expense';
 
             return {
-              accountCode: (row['account code'] || row['code'] || row['accountcode'] || '').toString(),
-              accountName: (row['account name'] || row['name'] || row['accountname'] || '').toString(),
+              accountCode: (row['accountcode'] || row['code'] || row['id'] || row['number'] || '').toString(),
+              accountName: (row['accountname'] || row['name'] || row['description'] || row['account'] || '').toString(),
               accountType: type,
-              debit: parseFloat((row['debit'] || '0').toString().replace(/,/g, '')) || 0,
-              credit: parseFloat((row['credit'] || '0').toString().replace(/,/g, '')) || 0,
-              isIntercompany: String(row['intercompany'] || row['isintercompany']).toLowerCase() === 'yes' || row['isintercompany'] === 'true' || row['isintercompany'] === true,
-              icPartner: row['ic partner'] || row['icpartner']
+              debit: parseFloat((row['debit'] || row['dr'] || '0').toString().replace(/[^0-9.-]/g, '')) || 0,
+              credit: parseFloat((row['credit'] || row['cr'] || '0').toString().replace(/[^0-9.-]/g, '')) || 0,
+              isIntercompany: String(row['intercompany'] || row['isintercompany'] || row['ic']).toLowerCase() === 'yes' || row['isintercompany'] === 'true' || row['isintercompany'] === true || row['ic'] === true,
+              icPartner: row['icpartner'] || row['icpartner'] || row['partner']
             };
           });
           
@@ -210,7 +226,6 @@ export default function EntitiesView() {
                     <span className="text-xs text-slate-500">Upload TB (CSV/XLSX)</span>
                     <input 
                       type="file" 
-                      accept=".csv,.xlsx,.xls" 
                       className="hidden" 
                       onChange={(e) => e.target.files?.[0] && handleFileUpload(entity.id, e.target.files[0])}
                     />

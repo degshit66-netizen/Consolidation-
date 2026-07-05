@@ -2,29 +2,9 @@ import express from "express";
 import path from "path";
 import multer from "multer";
 import Papa from "papaparse";
-import { initializeApp, cert, getApps } from "firebase-admin/app";
-import { getFirestore, FieldValue } from "firebase-admin/firestore";
-import { v4 as uuidv4 } from "uuid";
 import dotenv from "dotenv";
 
 dotenv.config();
-
-// Initialize Firebase Admin (only if vars exist to prevent crash without them)
-if (process.env.FIREBASE_PROJECT_ID && getApps().length === 0) {
-  try {
-    initializeApp({
-      credential: cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        // Replace literal \n with actual newlines if provided in env var string
-        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n')
-      })
-    });
-    console.log("Firebase Admin Initialized");
-  } catch (err) {
-    console.error("Firebase Admin Initialization Error:", err);
-  }
-}
 
 import { GoogleGenAI, Type } from "@google/genai";
 
@@ -197,7 +177,7 @@ app.post("/api/consolidate", upload.array('files'), async (req, res) => {
         investmentAccounts.forEach((acc: any) => {
           let totalEliminatedEquity = 0;
           eliminations.push({
-            id: uuidv4(),
+            id: crypto.randomUUID(),
             type: 'Investment',
             description: `Elimination of investment in ${sub.name}`,
             debit: 0,
@@ -214,7 +194,7 @@ app.post("/api/consolidate", upload.array('files'), async (req, res) => {
             if (eliminatedAmount !== 0) {
               totalEliminatedEquity += eliminatedAmount;
               eliminations.push({
-                id: uuidv4(),
+                id: crypto.randomUUID(),
                 type: 'Investment',
                 description: `Elimination of Sub Equity - ${sub.name} (${se.accountName})`,
                 debit: eliminatedAmount,
@@ -230,7 +210,7 @@ app.post("/api/consolidate", upload.array('files'), async (req, res) => {
           const goodwill = acc.debit - totalEliminatedEquity;
           if (Math.abs(goodwill) > 0.01) {
             eliminations.push({
-              id: uuidv4(),
+              id: crypto.randomUUID(),
               type: 'Investment',
               description: `Recognition of Goodwill on Acquisition of ${sub.name}`,
               debit: goodwill > 0 ? goodwill : 0,
@@ -259,7 +239,7 @@ app.post("/api/consolidate", upload.array('files'), async (req, res) => {
     consolidatedEntities.forEach((entity: any) => {
       entity.trialBalance.filter((e: any) => e.isIntercompany || e.mappedTo?.startsWith('IC ')).forEach((entry: any) => {
         eliminations.push({
-          id: uuidv4(),
+          id: crypto.randomUUID(),
           type: 'Intercompany',
           description: `Elimination of IC ${entry.accountName} - ${entity.name}`,
           debit: entry.credit,
@@ -282,7 +262,7 @@ app.post("/api/consolidate", upload.array('files'), async (req, res) => {
         const nciValue = equity * nciPercent;
         if (Math.abs(nciValue) > 0.01) {
           eliminations.push({
-            id: uuidv4(),
+            id: crypto.randomUUID(),
             type: 'NCI',
             description: `NCI Allocation for ${sub.name} (${(nciPercent * 100).toFixed(0)}%)`,
             debit: 0,
@@ -293,7 +273,7 @@ app.post("/api/consolidate", upload.array('files'), async (req, res) => {
           });
           
           eliminations.push({
-            id: uuidv4(),
+            id: crypto.randomUUID(),
             type: 'NCI',
             description: `NCI Earnings Allocation for ${sub.name}`,
             debit: nciValue,
@@ -305,20 +285,6 @@ app.post("/api/consolidate", upload.array('files'), async (req, res) => {
         }
       }
     });
-
-    // Save to Firestore if initialized
-    if (getApps().length > 0) {
-      try {
-        const db = getFirestore();
-        await db.collection("consolidations").add({
-          timestamp: FieldValue.serverTimestamp(),
-          entities: entities,
-          eliminations: eliminations
-        });
-      } catch (dbErr) {
-        console.error("Firestore save error:", dbErr);
-      }
-    }
 
     res.json({ entities, eliminations });
   } catch (err: any) {
