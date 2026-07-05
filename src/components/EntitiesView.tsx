@@ -170,7 +170,8 @@ export default function EntitiesView() {
                   <AlertCircle className="text-amber-500" size={20} />
                 )}
                 <button 
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation();
                     deleteEntity(entity.id);
                   }}
                   className="p-1 hover:bg-red-500/10 rounded text-slate-600 hover:text-red-500 transition-colors"
