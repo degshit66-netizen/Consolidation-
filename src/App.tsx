@@ -18,26 +18,29 @@ import {
   Calculator,
   ChevronRight,
   Menu,
-  X
+  X,
+  Wand2
 } from 'lucide-react';
 import { ConsolidationProvider, useConsolidation } from './context/ConsolidationContext';
 import { cn } from './lib/utils';
 
 // Module Components
 import EntitiesView from './components/EntitiesView';
+import FinancialConsolidator from './components/FinancialConsolidator';
 import ConsolidationView from './components/ConsolidationView';
 import ReportsView from './components/ReportsView';
 import AuditTrailView from './components/AuditTrailView';
 import SettingsView from './components/SettingsView';
 
-type Module = 'Consolidation' | 'Entities' | 'Reports' | 'Audit Trail' | 'Settings';
+type Module = 'Consolidator' | 'Entities' | 'Consolidation' | 'Reports' | 'Audit Trail' | 'Settings';
 
 function Dashboard() {
-  const [activeModule, setActiveModule] = useState<Module>('Entities');
+  const [activeModule, setActiveModule] = useState<Module>('Consolidator');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const { entities, logs } = useConsolidation();
 
   const navItems = [
+    { name: 'Consolidator', icon: Wand2 },
     { name: 'Entities', icon: Building2, count: entities.length },
     { name: 'Consolidation', icon: Calculator },
     { name: 'Reports', icon: FilePieChart },
@@ -47,6 +50,7 @@ function Dashboard() {
 
   const renderModule = () => {
     switch (activeModule) {
+      case 'Consolidator': return <FinancialConsolidator />;
       case 'Entities': return <EntitiesView />;
       case 'Consolidation': return <ConsolidationView />;
       case 'Reports': return <ReportsView />;

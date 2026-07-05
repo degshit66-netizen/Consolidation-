@@ -14,9 +14,11 @@ import { AccountType } from '../types/finance';
 
 export default function ReportsView() {
   const { entities, eliminations, settings, loadSampleData } = useConsolidation();
+  
+  const consolidatedEntities = entities.filter(e => e.type === 'Parent' || (e.type === 'Subsidiary' && e.ownershipPercentage >= 50));
 
   // Simple aggregation for the report (using Total Assets as the primary metric)
-  const reportData = entities.map(e => {
+  const reportData = consolidatedEntities.map(e => {
     const assets = e.trialBalance
       .filter(item => item.accountType === 'Asset')
       .reduce((sum, item) => sum + (item.debit - item.credit), 0);
@@ -39,7 +41,7 @@ export default function ReportsView() {
     let total = 0;
     const isNormalDebit = type === 'Asset' || type === 'Expense';
 
-    entities.forEach(e => {
+    consolidatedEntities.forEach(e => {
       total += e.trialBalance
         .filter(item => item.accountType === type)
         .reduce((sum, item) => {
@@ -55,7 +57,7 @@ export default function ReportsView() {
   };
 
   const getEntityValue = (entityId: string, type: AccountType) => {
-    const entity = entities.find(e => e.id === entityId);
+    const entity = consolidatedEntities.find(e => e.id === entityId);
     if (!entity) return 0;
     const isNormalDebit = type === 'Asset' || type === 'Expense';
     
@@ -67,9 +69,9 @@ export default function ReportsView() {
   };
 
   const handleExport = () => {
-    const headers = ['Account Class', ...entities.map(e => e.name), 'Eliminations', 'Consolidated'];
+    const headers = ['Account Class', ...consolidatedEntities.map(e => e.name), 'Eliminations', 'Consolidated'];
     const rows = accountTypes.map(type => {
-      const entityValues = entities.map(e => 
+      const entityValues = consolidatedEntities.map(e => 
         e.trialBalance
           .filter(item => item.accountType === type)
           .reduce((sum, item) => sum + (item.debit - item.credit), 0)
@@ -102,7 +104,7 @@ export default function ReportsView() {
   let totalAssets = 0;
   let totalLiabilities = 0;
 
-  entities.forEach(entity => {
+  consolidatedEntities.forEach(entity => {
     entity.trialBalance.forEach(entry => {
       if (entry.accountType === 'Asset') {
         totalAssets += (entry.debit - entry.credit);
@@ -201,7 +203,7 @@ export default function ReportsView() {
                 <thead>
                   <tr className="bg-slate-50/50 text-slate-500">
                     <th className="px-6 py-4 border-b border-slate-200 font-semibold">Account Class</th>
-                    {entities.map(e => (
+                    {consolidatedEntities.map(e => (
                       <th key={e.id} className="px-6 py-4 border-b border-slate-200 font-semibold text-right">{e.name}</th>
                     ))}
                     <th className="px-6 py-4 border-b border-slate-200 font-semibold text-right text-amber-500">Eliminations</th>
@@ -222,7 +224,7 @@ export default function ReportsView() {
                     return (
                       <tr key={type} className="hover:bg-slate-100/20 border-b border-slate-200/50">
                         <td className="px-6 py-4 font-medium">{type}s</td>
-                        {entities.map(e => {
+                        {consolidatedEntities.map(e => {
                           const val = getEntityValue(e.id, type);
                           return (
                             <td key={e.id} className="px-6 py-4 text-right font-mono">{formatCurrency(val, e.currency)}</td>
@@ -240,7 +242,7 @@ export default function ReportsView() {
                   })}
                   <tr className="bg-slate-50/30 font-bold border-t border-slate-300">
                     <td className="px-6 py-4 text-slate-900 uppercase tracking-widest text-[10px]">Total Balance Check (Dr - Cr)</td>
-                    {entities.map(e => {
+                    {consolidatedEntities.map(e => {
                       const total = e.trialBalance.reduce((s, i) => s + (i.debit - i.credit), 0);
                       return (
                         <td key={e.id} className="px-6 py-4 text-right text-slate-500 font-mono">{total.toFixed(2)}</td>

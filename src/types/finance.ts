@@ -19,6 +19,7 @@ export interface TrialBalanceEntry {
   credit: number;
   isIntercompany?: boolean;
   icPartner?: string;
+  mappedTo?: string; // Standard Account Name
 }
 
 export interface Entity {
@@ -32,6 +33,7 @@ export interface Entity {
   fileName?: string;
   lastUploadAt?: string;
   isValidated: boolean;
+  isMapped: boolean;
 }
 
 export interface EliminationEntry {

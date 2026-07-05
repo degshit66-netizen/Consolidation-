@@ -17,9 +17,10 @@ import { generateHash } from '../lib/utils';
 import { saveStateToDB, loadStateFromDB } from '../lib/storage';
 
 interface ConsolidationContextType extends ConsolidationState {
-  addEntity: (entity: Omit<Entity, 'id' | 'isValidated' | 'trialBalance'>) => void;
+  addEntity: (entity: Omit<Entity, 'id' | 'isValidated' | 'trialBalance' | 'isMapped'>) => void;
   deleteEntity: (id: string) => void;
   updateTrialBalance: (entityId: string, tb: TrialBalanceEntry[], rawCsvData?: string, fileName?: string) => void;
+  updateMapping: (entityId: string, accountCode: string, targetAccount: string) => void;
   loadSampleData: () => void;
   runConsolidation: () => void;
   addLog: (action: string, details: string) => void;
@@ -79,11 +80,12 @@ export const ConsolidationProvider: React.FC<{ children: React.ReactNode }> = ({
     setState(prev => ({ ...prev, logs: [newLog, ...prev.logs] }));
   }, []);
 
-  const addEntity = useCallback((entityData: Omit<Entity, 'id' | 'isValidated' | 'trialBalance'>) => {
+  const addEntity = useCallback((entityData: Omit<Entity, 'id' | 'isValidated' | 'trialBalance' | 'isMapped'>) => {
     const newEntity: Entity = {
       ...entityData,
       id: uuidv4(),
       isValidated: false,
+      isMapped: false,
       trialBalance: [],
     };
     setState(prev => ({ ...prev, entities: [...prev.entities, newEntity] }));
@@ -108,11 +110,25 @@ export const ConsolidationProvider: React.FC<{ children: React.ReactNode }> = ({
     const diff = Math.abs(totalDebits - totalCredits);
     const isValid = diff < 0.01;
 
+    // Auto-map if possible (simple heuristic)
+    const updatedTb = tb.map(item => ({
+      ...item,
+      mappedTo: item.mappedTo || item.accountName
+    }));
+
     setState(prev => ({
       ...prev,
       entities: prev.entities.map(e => 
         e.id === entityId 
-          ? { ...e, trialBalance: tb, isValidated: isValid, lastUploadAt: new Date().toISOString(), rawCsvData, fileName } 
+          ? { 
+              ...e, 
+              trialBalance: updatedTb, 
+              isValidated: isValid, 
+              isMapped: updatedTb.every(i => !!i.mappedTo),
+              lastUploadAt: new Date().toISOString(), 
+              rawCsvData, 
+              fileName 
+            } 
           : e
       )
     }));
@@ -123,6 +139,23 @@ export const ConsolidationProvider: React.FC<{ children: React.ReactNode }> = ({
       addLog('TB_REJECTED', `Trial Balance for ${entityId.slice(0, 8)} failed. Out of balance by ${diff.toFixed(2)}`);
     }
   }, [addLog]);
+
+  const updateMapping = useCallback((entityId: string, accountCode: string, targetAccount: string) => {
+    setState(prev => ({
+      ...prev,
+      entities: prev.entities.map(e => {
+        if (e.id !== entityId) return e;
+        const newTb = e.trialBalance.map(item => 
+          item.accountCode === accountCode ? { ...item, mappedTo: targetAccount } : item
+        );
+        return {
+          ...e,
+          trialBalance: newTb,
+          isMapped: newTb.every(i => !!i.mappedTo)
+        };
+      })
+    }));
+  }, []);
 
   const loadSampleData = useCallback(() => {
     const parentId = uuidv4();
@@ -136,14 +169,15 @@ export const ConsolidationProvider: React.FC<{ children: React.ReactNode }> = ({
         ownershipPercentage: 100,
         currency: 'CAD',
         isValidated: true,
+        isMapped: true,
         lastUploadAt: new Date().toISOString(),
         trialBalance: [
-          { accountCode: '1000', accountName: 'Cash & Equivalents', accountType: 'Asset', debit: 1250000, credit: 0 },
-          { accountCode: '1200', accountName: 'Investment in Stratify Tech', accountType: 'Asset', debit: 450000, credit: 0 },
-          { accountCode: '1300', accountName: 'IC Receivable (Tech)', accountType: 'Asset', debit: 75000, credit: 0, isIntercompany: true, icPartner: 'Stratify Tech (80%)' },
-          { accountCode: '2000', accountName: 'Accounts Payable', accountType: 'Liability', debit: 0, credit: 325000 },
-          { accountCode: '3000', accountName: 'Common Shares', accountType: 'Equity', debit: 0, credit: 1000000 },
-          { accountCode: '4000', accountName: 'Retained Earnings', accountType: 'Equity', debit: 0, credit: 450000 },
+          { accountCode: '1000', accountName: 'Cash & Equivalents', accountType: 'Asset', debit: 1250000, credit: 0, mappedTo: 'Cash' },
+          { accountCode: '1200', accountName: 'Investment in Stratify Tech', accountType: 'Asset', debit: 450000, credit: 0, mappedTo: 'Investments' },
+          { accountCode: '1300', accountName: 'IC Receivable (Tech)', accountType: 'Asset', debit: 75000, credit: 0, isIntercompany: true, icPartner: 'Stratify Tech (80%)', mappedTo: 'IC Receivable' },
+          { accountCode: '2000', accountName: 'Accounts Payable', accountType: 'Liability', debit: 0, credit: 325000, mappedTo: 'Accounts Payable' },
+          { accountCode: '3000', accountName: 'Common Shares', accountType: 'Equity', debit: 0, credit: 1000000, mappedTo: 'Share Capital' },
+          { accountCode: '4000', accountName: 'Retained Earnings', accountType: 'Equity', debit: 0, credit: 450000, mappedTo: 'Retained Earnings' },
         ]
       },
       {
@@ -153,13 +187,14 @@ export const ConsolidationProvider: React.FC<{ children: React.ReactNode }> = ({
         ownershipPercentage: 80,
         currency: 'CAD',
         isValidated: true,
+        isMapped: true,
         lastUploadAt: new Date().toISOString(),
         trialBalance: [
-          { accountCode: '1000', accountName: 'Cash', accountType: 'Asset', debit: 350000, credit: 0 },
-          { accountCode: '2000', accountName: 'IC Payable (Parent)', accountType: 'Liability', debit: 0, credit: 75000, isIntercompany: true, icPartner: 'STRATIFY Global Parent' },
-          { accountCode: '2100', accountName: 'Bank Loan', accountType: 'Liability', debit: 0, credit: 125000 },
-          { accountCode: '3000', accountName: 'Common Shares', accountType: 'Equity', debit: 0, credit: 100000 },
-          { accountCode: '3100', accountName: 'Retained Earnings', accountType: 'Equity', debit: 0, credit: 50000 },
+          { accountCode: '1000', accountName: 'Cash', accountType: 'Asset', debit: 350000, credit: 0, mappedTo: 'Cash' },
+          { accountCode: '2000', accountName: 'IC Payable (Parent)', accountType: 'Liability', debit: 0, credit: 75000, isIntercompany: true, icPartner: 'STRATIFY Global Parent', mappedTo: 'IC Payable' },
+          { accountCode: '2100', accountName: 'Bank Loan', accountType: 'Liability', debit: 0, credit: 125000, mappedTo: 'Loans' },
+          { accountCode: '3000', accountName: 'Common Shares', accountType: 'Equity', debit: 0, credit: 100000, mappedTo: 'Share Capital' },
+          { accountCode: '3100', accountName: 'Retained Earnings', accountType: 'Equity', debit: 0, credit: 50000, mappedTo: 'Retained Earnings' },
         ]
       }
     ];
@@ -171,6 +206,11 @@ export const ConsolidationProvider: React.FC<{ children: React.ReactNode }> = ({
   const runConsolidation = useCallback(async () => {
     const { entities } = state;
     if (entities.length === 0) return;
+
+    if (!entities.every(e => e.isValidated && e.isMapped)) {
+      addLog('CONSOLIDATION_BLOCKED', 'All entities must be balanced and mapped before consolidation.');
+      return;
+    }
 
     try {
       addLog('CONSOLIDATION_STARTED', 'Initiating server-side consolidation...');
@@ -226,7 +266,7 @@ export const ConsolidationProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   return (
-    <ConsolidationContext.Provider value={{ ...state, addEntity, deleteEntity, updateTrialBalance, loadSampleData, runConsolidation, addLog, updateSettings }}>
+    <ConsolidationContext.Provider value={{ ...state, addEntity, deleteEntity, updateTrialBalance, updateMapping, loadSampleData, runConsolidation, addLog, updateSettings }}>
       {children}
     </ConsolidationContext.Provider>
   );
