@@ -1,0 +1,6 @@
+{
+  "name": "Consolidation Engine",
+  "description": "IFRS-10 compliant enterprise financial consolidation engine with automated eliminations and NCI computations.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
